@@ -10,8 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     env:
       APP_ID: 1780863075904
+      DISCLOUD_TOKEN: ${{ secrets.DISCLOUD_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install SDK
+        run: npm install discloud.app
 
       - name: Prepare environment
         run: |
@@ -23,27 +27,12 @@ jobs:
           SERVICES_URL=${{ secrets.SERVICES_URL }}
           API_SECRET=${{ secrets.API_SECRET }}
           EOF
-          chmod 600 /dev/shm/.env
           cp /dev/shm/.env .env
-          zip -r /dev/shm/bot.zip . -x "*.git*" ".github/*" "*.log"
+          zip -r /dev/shm/bot.zip . -x "*.git*" ".github/*" "*.log" "deploy.js"
           shred -u .env
 
-      - name: Delete old app
-        run: |
-          curl -X DELETE https://api.discloud.app/v2/app/${{ env.APP_ID }}/delete \
-            -H "api-token: ${{ secrets.DISCLOUD_TOKEN }}"
-          sleep 5
-
-      - name: Upload new app
-        run: |
-          curl -X POST https://api.discloud.app/v2/upload \
-            -H "api-token: ${{ secrets.DISCLOUD_TOKEN }}" \
-            -F "file=@/dev/shm/bot.zip;type=application/zip"
-
-      - name: Check Status
-        run: |
-          curl -X GET https://api.discloud.app/v2/app/${{ env.APP_ID }}/status \
-            -H "api-token: ${{ secrets.DISCLOUD_TOKEN }}"
+      - name: Deploy with SDK
+        run: node deploy.js
 
       - name: Cleanup
         if: always()
