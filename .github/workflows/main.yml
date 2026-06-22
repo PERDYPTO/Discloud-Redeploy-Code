@@ -13,9 +13,9 @@ jobs:
 
       - name: Setup environment
         run: |
-          npm i -g discloud-cli
-          discloud --version
-          discloud login --token ${{ secrets.DISCLOUD_TOKEN }}
+          npm install -g discloud-cli
+          # Pass the token via stdin to bypass the interactive prompt
+          echo "${{ secrets.DISCLOUD_TOKEN }}" | discloud login
 
       - name: Reset deployment
         run: |
