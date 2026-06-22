@@ -1,25 +1,27 @@
-name: Deploy Bot
+name: Deploy to Discloud (Manual CLI)
 
 on:
-  schedule:
-    - cron: '0 2 * * *'
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      APP_ID: 1780863075904
       DISCLOUD_TOKEN: ${{ secrets.DISCLOUD_TOKEN }}
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Install SDK
-        run: npm install discloud.app
+      - name: Install discloud-cli
+        run: npm install -g discloud-cli
 
-      - name: Prepare environment
+      - name: Write .env to RAM disk
         run: |
-          cat > /dev/shm/.env << 'EOF'
+          cat > /dev/shm/.env <<EOF
           DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}
           DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}
           HF_TOKEN=${{ secrets.HF_TOKEN }}
@@ -27,15 +29,23 @@ jobs:
           SERVICES_URL=${{ secrets.SERVICES_URL }}
           API_SECRET=${{ secrets.API_SECRET }}
           EOF
-          cp /dev/shm/.env .env
-          zip -r /dev/shm/bot.zip . -x "*.git*" ".github/*" "*.log" "deploy.js"
-          shred -u .env
 
-      - name: Deploy with SDK
-        run: node deploy.js
-
-      - name: Cleanup
-        if: always()
+      - name: Copy project to staging dir (exclude .github)
         run: |
-          shred -u /dev/shm/.env 2>/dev/null || true
-          shred -u /dev/shm/bot.zip 2>/dev/null || true
+          mkdir /tmp/deploy
+          rsync -a --exclude='.github' . /tmp/deploy/
+          cp /dev/shm/.env /tmp/deploy/.env
+
+      - name: Delete existing app
+        run: discloud app delete 1780863075904
+
+      - name: Upload app
+        working-directory: /tmp/deploy
+        run: discloud app up
+
+      - name: Check app status
+        run: discloud app status 1780863075904
+
+      - name: Shred .env
+        if: always()
+        run: shred -u /dev/shm/.env
