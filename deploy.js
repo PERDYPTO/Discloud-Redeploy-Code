@@ -1,37 +1,51 @@
-const { discloud } = require("discloud.app");
-const fs = require("fs");
+name: Deploy to Discloud (Manual CLI)
 
-async function run() {
-  try {
-    await discloud.login(process.env.DISCLOUD_TOKEN);
-    const zipPath = "/dev/shm/bot.zip";
+on:
+  workflow_dispatch:
 
-    // 1. Attempt to delete existing app (Optional: keep only if you really want a fresh start)
-    try {
-      await discloud.apps.delete(process.env.APP_ID);
-      console.log("Old app instance deleted.");
-    } catch (err) {
-      console.log("No existing app found to delete, proceeding...");
-    }
+permissions:
+  contents: read
 
-    // 2. Upload/Create new app
-    console.log("Uploading new build...");
-    const result = await discloud.apps.create({
-      file: {
-        data: fs.readFileSync(zipPath),
-        name: "bot.zip"
-      }
-    });
-    console.log("Upload successful:", result.message);
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      DISCLOUD_TOKEN: ${{ secrets.DISCLOUD_TOKEN }}
 
-    // 3. Fetch status
-    const status = await discloud.apps.status.fetch(process.env.APP_ID);
-    console.log("Deployment confirmed. Container status:", status.container);
-    
-  } catch (err) {
-    console.error("Deployment failed:", err.message);
-    process.exit(1);
-  }
-}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-run();
+      - name: Install discloud-cli
+        run: npm install -g discloud-cli
+
+      - name: Write .env to RAM disk
+        run: |
+          cat > /dev/shm/.env <<EOF
+          DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}
+          DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}
+          HF_TOKEN=${{ secrets.HF_TOKEN }}
+          HF_BUCKET_NAME=${{ secrets.HF_BUCKET_NAME }}
+          SERVICES_URL=${{ secrets.SERVICES_URL }}
+          API_SECRET=${{ secrets.API_SECRET }}
+          EOF
+
+      - name: Copy project to staging dir (exclude .github)
+        run: |
+          mkdir /tmp/deploy
+          rsync -a --exclude='.github' . /tmp/deploy/
+          cp /dev/shm/.env /tmp/deploy/.env
+
+      - name: Delete existing app
+        run: discloud app delete 1780863075904
+
+      - name: Upload app
+        working-directory: /tmp/deploy
+        run: discloud app up
+
+      - name: Check app status
+        run: discloud app status 1780863075904
+
+      - name: Shred .env
+        if: always()
+        run: shred -u /dev/shm/.env
