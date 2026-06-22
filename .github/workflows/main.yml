@@ -13,7 +13,8 @@ jobs:
 
       - name: Setup environment
         run: |
-          npm install -g @discloudapp/cli
+          npm i -g discloud-cli
+          discloud --version
           discloud login --token ${{ secrets.DISCLOUD_TOKEN }}
 
       - name: Reset deployment
