@@ -1,0 +1,50 @@
+name: Deploy Bot
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup environment
+        run: |
+          npm install -g @discloudapp/cli
+          discloud login --token ${{ secrets.DISCLOUD_TOKEN }}
+
+      - name: Reset deployment
+        run: |
+          discloud app delete ArchyWelcomer || true
+          sleep 5
+
+      - name: Prepare secrets
+        run: |
+          cat > /dev/shm/.env << 'EOF'
+          DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}
+          DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}
+          HF_TOKEN=${{ secrets.HF_TOKEN }}
+          HF_BUCKET_NAME=${{ secrets.HF_BUCKET_NAME }}
+          SERVICES_URL=${{ secrets.SERVICES_URL }}
+          API_SECRET=${{ secrets.API_SECRET }}
+          EOF
+          chmod 600 /dev/shm/.env
+
+      - name: Build package
+        run: |
+          cp /dev/shm/.env .env
+          zip -r /dev/shm/bot.zip . -x "*.git*" ".github/*" "*.log"
+          shred -u .env
+
+      - name: Deploy
+        run: discloud app upload /dev/shm/bot.zip
+
+      - name: Cleanup
+        if: always()
+        run: |
+          shred -u /dev/shm/.env 2>/dev/null || true
+          shred -u /dev/shm/bot.zip 2>/dev/null || true
+          discloud app status ArchyWelcomer
