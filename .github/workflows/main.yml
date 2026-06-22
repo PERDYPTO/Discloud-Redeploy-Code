@@ -1,7 +1,9 @@
-name: Deploy to Discloud (Manual CLI)
+name: Deploy to Discloud
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -36,8 +38,8 @@ jobs:
           rsync -a --exclude='.github' . /tmp/deploy/
           cp /dev/shm/.env /tmp/deploy/.env
 
-      - name: Delete existing app
-        run: discloud app delete 1780863075904
+      - name: Delete existing app (if exists)
+        run: echo "y" | discloud app delete 1780863075904 || echo "App not found or already deleted, continuing..."
 
       - name: Upload app
         working-directory: /tmp/deploy
